@@ -163,12 +163,12 @@ button.secondary {
   background: transparent;
   border: none;
   color: var(--primary);
-  width: 44px;
-  height: 44px;
+  width: 72px;
+  height: 72px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
 }
 
@@ -177,6 +177,21 @@ button.secondary {
   font-size: 22px;
   line-height: 1;
   display: inline-block;
+}
+
+#menuToggle svg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Global Material Symbols default settings (matches requested snippet) */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-feature-settings: 'liga';
 }
 
 header { padding: 12px 14px; }
@@ -303,6 +318,14 @@ header { padding: 12px 14px; }
   justify-content: center;
   font-weight: bold;
   margin-right: 12px;
+}
+
+/* Person icon in settings avatar */
+.person-icon {
+  font-variation-settings: "FILL" 0, "wght" 600, "GRAD" 0, "opsz" 56;
+  font-size: 48px;
+  line-height: 1;
+  display: inline-block;
 }
 
 /* Settings Toggle Switch */
