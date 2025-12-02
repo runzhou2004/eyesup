@@ -46,13 +46,107 @@ function switchPage(pageName) {
   // Refresh data when entering pages
   if (pageName === 'contacts') loadContacts();
   if (pageName === 'keywords') loadKeywords();
+
+  // When navigating to the login page, treat it as logout (hide menu and clear auth)
+  if (pageName === 'login') {
+    demoToken = null;
+    try { localStorage.removeItem('eyesup_token'); } catch(e) {}
+    isAuthenticated = false;
+    const mt = document.getElementById('menuToggle');
+    if (mt) mt.hidden = true;
+    // close menu if open
+    if (typeof closeMenu === 'function') closeMenu();
+  } else {
+    // show menu toggle only when authenticated
+    const mt = document.getElementById('menuToggle');
+    if (mt) mt.hidden = !isAuthenticated;
+  }
 }
 
 document.querySelectorAll('#nav button').forEach(btn => {
   btn.addEventListener('click', (e) => switchPage(e.target.getAttribute('data-page')));
 });
 
+// Menu toggle behavior: open/close slide-in menu
+const menuToggle = document.getElementById('menuToggle');
+const sideMenu = document.getElementById('sideMenu');
+const menuOverlay = document.getElementById('menuOverlay');
 
+function openMenu() {
+  if (!sideMenu) return;
+  sideMenu.classList.add('open');
+  menuOverlay && menuOverlay.classList.add('open');
+  menuToggle && menuToggle.setAttribute('aria-expanded', 'true');
+  sideMenu.setAttribute('aria-hidden', 'false');
+}
+
+function closeMenu() {
+  if (!sideMenu) return;
+  sideMenu.classList.remove('open');
+  menuOverlay && menuOverlay.classList.remove('open');
+  menuToggle && menuToggle.setAttribute('aria-expanded', 'false');
+  sideMenu.setAttribute('aria-hidden', 'true');
+}
+
+if (menuToggle) {
+  menuToggle.addEventListener('click', () => {
+    if (sideMenu.classList.contains('open')) closeMenu(); else openMenu();
+  });
+}
+
+if (menuOverlay) {
+  menuOverlay.addEventListener('click', () => closeMenu());
+}
+
+// Close menu when selecting a nav item
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (!target) return;
+  if (target.closest && target.closest('#nav')) {
+    // small delay so page switch takes effect then menu closes
+    setTimeout(closeMenu, 120);
+  }
+});
+
+// Close with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
+});
+
+// Logout helper to clear token and hide menu
+window.logout = function() {
+  demoToken = null;
+  try { localStorage.removeItem('eyesup_token'); } catch(e) {}
+  isAuthenticated = false;
+  const mt = document.getElementById('menuToggle');
+  if (mt) mt.hidden = true;
+  if (typeof closeMenu === 'function') closeMenu();
+  switchPage('login');
+};
+
+// Ensure menu toggle visibility matches auth state on load
+document.addEventListener('DOMContentLoaded', () => {
+  const mt = document.getElementById('menuToggle');
+  if (mt) mt.hidden = !isAuthenticated;
+  // If the user info is available in localStorage, log it
+  if (isAuthenticated) {
+    try {
+      const rawUser = localStorage.getItem('eyesup_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        console.log('User logged in:', u.email || u.name || demoToken);
+      } else {
+        console.log('User logged in:', demoToken);
+      }
+    } catch (e) {
+      console.log('User logged in:', demoToken);
+    }
+  }
+  // initialize mic UI
+  try { setMicStateMode('off'); } catch(e) {}
+});
+
+ 
 // --- Chat/Home Logic ---
 function addMessageToUI(text, type) {
   const container = document.getElementById('messages');
@@ -80,6 +174,15 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
 const startListening = () => {
   if (state.isListening) return;
   try {
+    // update UI to show listening (no voice detected yet)
+    const micEl = document.getElementById('micCircle');
+    if (micEl) {
+      micEl.setAttribute('aria-pressed', 'true');
+      micEl.classList.remove('mic-off');
+      micEl.classList.add('mic-listening');
+    }
+    // start audio monitor (permission prompt + level detection)
+    startAudioMonitor();
     recognition.start();
     state.isListening = true;
     alert("Listening... speak now.");
@@ -94,10 +197,130 @@ const driveMic = document.getElementById('d_micBtn');
 if(driveMic) driveMic.addEventListener('click', startListening);
 
 
+// Mic UI helper
+const micEl = document.getElementById('micCircle');
+function setMicStateMode(mode) {
+  // mode: 'off' | 'listening' | 'voice'
+  if (!micEl) return;
+  micEl.classList.remove('mic-off', 'mic-listening', 'mic-voice');
+  if (mode === 'off') {
+    micEl.classList.add('mic-off');
+    micEl.setAttribute('aria-pressed', 'false');
+  } else if (mode === 'listening') {
+    micEl.classList.add('mic-listening');
+    micEl.setAttribute('aria-pressed', 'true');
+  } else if (mode === 'voice') {
+    micEl.classList.add('mic-voice');
+    micEl.setAttribute('aria-pressed', 'true');
+  }
+  // update textual status
+  const statusEl = document.getElementById('micStatus');
+  if (statusEl) {
+    statusEl.classList.remove('mic-status--off', 'mic-status--listening', 'mic-status--voice', 'mic-status--error');
+    if (mode === 'off') { statusEl.textContent = 'Off'; statusEl.classList.add('mic-status--off'); }
+    else if (mode === 'listening') { statusEl.textContent = 'Listening (no voice)'; statusEl.classList.add('mic-status--listening'); }
+    else if (mode === 'voice') { statusEl.textContent = 'Voice detected'; statusEl.classList.add('mic-status--voice'); }
+    else { statusEl.textContent = 'Error'; statusEl.classList.add('mic-status--error'); }
+  }
+}
+
+// Speech recognition event wiring for visual feedback
+if (recognition) {
+  recognition.onstart = () => {
+    state.isListening = true;
+    setMicStateMode('listening');
+  };
+  recognition.onsoundstart = () => {
+    // any sound detected - treat as input present
+    setMicStateMode('voice');
+  };
+  recognition.onspeechstart = () => {
+    setMicStateMode('voice');
+  };
+  recognition.onspeechend = () => {
+    // speech ended; back to listening (no voice) until recognition ends
+    setMicStateMode('listening');
+  };
+  recognition.onend = () => {
+    state.isListening = false;
+    setMicStateMode('off');
+    stopAudioMonitor();
+  };
+  recognition.onaudioend = () => {
+    // if recognition still running but audio ended, show listening/no-voice
+    if (state.isListening) setMicStateMode('listening');
+  };
+  recognition.onerror = (ev) => {
+    console.error('Speech recognition error', ev.error);
+    state.isListening = false;
+    // indicate error/no voice
+    setMicStateMode('listening');
+    // also show error text briefly
+    const statusEl = document.getElementById('micStatus');
+    if (statusEl) { statusEl.textContent = 'Recognition error'; statusEl.classList.add('mic-status--error'); }
+    stopAudioMonitor();
+  };
+}
+
+// Audio level monitor using getUserMedia + AnalyserNode
+let _audioStream = null;
+let _audioCtx = null;
+let _analyser = null;
+let _dataArray = null;
+let _volInterval = null;
+function startAudioMonitor() {
+  if (_audioStream) return; // already running
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    _audioStream = stream;
+    try {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = _audioCtx.createMediaStreamSource(stream);
+      _analyser = _audioCtx.createAnalyser();
+      _analyser.fftSize = 512;
+      source.connect(_analyser);
+      _dataArray = new Uint8Array(_analyser.frequencyBinCount);
+      _volInterval = setInterval(() => {
+        _analyser.getByteTimeDomainData(_dataArray);
+        // compute normalized rms
+        let sum = 0;
+        for (let i = 0; i < _dataArray.length; i++) {
+          const v = (_dataArray[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / _dataArray.length);
+        // threshold tuned for typical laptop mic; adjust if too sensitive
+        const threshold = 0.02;
+        if (rms > threshold) setMicStateMode('voice');
+        else setMicStateMode('listening');
+      }, 120);
+    } catch (e) {
+      console.warn('AudioContext failed', e);
+    }
+  }).catch(err => {
+    console.warn('getUserMedia error', err);
+    const statusEl = document.getElementById('micStatus');
+    if (statusEl) { statusEl.textContent = 'Microphone blocked'; statusEl.classList.add('mic-status--error'); }
+  });
+}
+
+function stopAudioMonitor() {
+  if (_volInterval) { clearInterval(_volInterval); _volInterval = null; }
+  if (_analyser) { _analyser.disconnect && _analyser.disconnect(); _analyser = null; }
+  if (_audioCtx) { try { _audioCtx.close(); } catch(e) {} _audioCtx = null; }
+  if (_audioStream) {
+    _audioStream.getTracks().forEach(t => t.stop());
+    _audioStream = null;
+  }
+}
+
+
 // --- Contact Logic ---
 // simple auth token stored here after login
-// Load token from storage or use demo token for demo mode so actions work without explicit login
-let demoToken = localStorage.getItem('eyesup_token') || 'demo-token-123';
+// Load token from storage if present (treat 'demo-token-123' as not authenticated)
+const storedToken = localStorage.getItem('eyesup_token');
+let demoToken = storedToken && storedToken !== 'demo-token-123' ? storedToken : null;
+let isAuthenticated = !!demoToken;
 
 // helper to call authenticated endpoints
 async function authFetch(path, opts = {}) {
@@ -329,10 +552,15 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     });
     const body = await r.json();
     if (r.ok && body.token) {
-      demoToken = body.token;
-      switchPage('home');
-      loadContacts();
-      loadKeywords();
+        demoToken = body.token;
+        // persist token and mark authenticated
+        try { localStorage.setItem('eyesup_token', demoToken); } catch(e) {}
+        isAuthenticated = true;
+        const mt = document.getElementById('menuToggle');
+        if (mt) mt.hidden = false;
+        switchPage('home');
+        loadContacts();
+        loadKeywords();
     } else {
       alert(body.error || 'login failed');
     }

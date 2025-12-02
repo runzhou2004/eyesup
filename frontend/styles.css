@@ -7,10 +7,11 @@
   --text-muted: #888;
   --shadow: 0 4px 12px rgba(82, 45, 109, 0.15);
   --radius: 12px;
+  --mobile-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--mobile-font);
   background-color: #faf7fb;
   color: var(--text-main);
   margin: 0;
@@ -19,6 +20,15 @@ body {
   justify-content: center;
   min-height: 100vh;
 }
+
+/* Ensure the `hidden` attribute is honored even when author CSS sets display */
+[hidden] { display: none !important; }
+
+html { font-family: var(--mobile-font); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Make form controls and SVG elements inherit the mobile font */
+input, textarea, select, button { font-family: inherit; }
+svg { font-family: inherit; }
 
 #app {
   background: white;
@@ -147,6 +157,80 @@ button.secondary {
     height: 140px;
   }
 }
+
+/* Menu toggle button (top-right) */
+#menuToggle {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  width: 72px;
+  height: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+#menuToggle .material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-size: 22px;
+  line-height: 1;
+  display: inline-block;
+}
+
+#menuToggle svg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Global Material Symbols default settings (matches requested snippet) */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-feature-settings: 'liga';
+}
+
+header { padding: 12px 14px; }
+
+/* Slide-in side menu */
+.side-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 280px;
+  max-width: 85%;
+  background: white;
+  box-shadow: -8px 0 30px rgba(0,0,0,0.12);
+  transform: translateX(100%);
+  transition: transform 280ms cubic-bezier(.2,.9,.2,1);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+.side-menu.open {
+  transform: translateX(0);
+}
+.side-menu .side-menu-inner { display:flex; flex-direction:column; gap:10px; }
+.side-menu #nav { display:flex; flex-direction:column; gap:8px; }
+.side-menu #nav button { width:100%; text-align:left; padding:12px 14px; border-radius:10px; background: #f7f7fb; color: var(--primary); }
+
+/* overlay when menu open */
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.24);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 50;
+}
+.menu-overlay.open { opacity: 1; pointer-events: auto; }
 .social-login { margin-top: 30px; }
 .social-btn {
   display: flex;
@@ -171,6 +255,8 @@ button.secondary {
 /* Home */
 .mic-container {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
   margin: 20px 0;
 }
@@ -178,12 +264,79 @@ button.secondary {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  border: 2px solid var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 160ms ease;
 }
 .mic-circle svg { width: 30px; fill: var(--primary); }
+
+/* Mic visual states */
+.mic-circle.mic-off {
+  background: var(--accent);
+  box-shadow: 0 6px 18px rgba(82,45,109,0.12);
+}
+.mic-circle.mic-listening {
+  /* listening but no voice detected yet */
+  background: #e53935; /* red */
+  box-shadow: 0 6px 18px rgba(229,57,53,0.18);
+  transform: scale(1.02);
+}
+.mic-circle.mic-voice {
+  background: #4caf50; /* green */
+  box-shadow: 0 8px 28px rgba(76,175,80,0.22);
+  transform: scale(1.06);
+}
+
+.mic-circle.mic-off svg { fill: white; }
+.mic-circle.mic-listening svg { fill: white; }
+.mic-circle.mic-voice svg { fill: white; }
+
+/* small status dot */
+.mic-indicator {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.12);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+.mic-circle.mic-off .mic-indicator { background: rgba(118,81,169,0.95); }
+.mic-circle.mic-listening .mic-indicator { background: #b71c1c; transform: scale(1.05); }
+.mic-circle.mic-voice .mic-indicator { background: #1b5e20; transform: scale(1.15); }
+
+/* pulsing ring when voice is going through */
+.mic-circle.mic-voice::after {
+  content: '';
+  position: absolute;
+  left: -6px; right: -6px; top: -6px; bottom: -6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(76,175,80,0.18);
+  animation: micPulse 1200ms infinite;
+  pointer-events: none;
+}
+
+@keyframes micPulse {
+  0% { box-shadow: 0 0 0 0 rgba(76,175,80,0.28); }
+  70% { box-shadow: 0 0 0 18px rgba(76,175,80,0.01); }
+  100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
+}
+
+/* Mic status text */
+.mic-status {
+  margin-bottom: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.mic-status--off { color: #7a4eb0; }
+.mic-status--listening { color: #b71c1c; }
+.mic-status--voice { color: #2e7d32; }
+.mic-status--error { color: #b71c1c; font-weight: 700; }
 
 .suggested-messages .msg-chip {
   background: rgba(179, 157, 219, 0.3);
@@ -234,6 +387,14 @@ button.secondary {
   justify-content: center;
   font-weight: bold;
   margin-right: 12px;
+}
+
+/* Person icon in settings avatar */
+.person-icon {
+  font-variation-settings: "FILL" 0, "wght" 600, "GRAD" 0, "opsz" 56;
+  font-size: 48px;
+  line-height: 1;
+  display: inline-block;
 }
 
 /* Settings Toggle Switch */
