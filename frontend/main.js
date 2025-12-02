@@ -142,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('User logged in:', demoToken);
     }
   }
+  // initialize mic UI
+  try { setMicStateMode('off'); } catch(e) {}
 });
 
  
@@ -172,6 +174,15 @@ document.getElementById('simulateBtn').addEventListener('click', () => {
 const startListening = () => {
   if (state.isListening) return;
   try {
+    // update UI to show listening (no voice detected yet)
+    const micEl = document.getElementById('micCircle');
+    if (micEl) {
+      micEl.setAttribute('aria-pressed', 'true');
+      micEl.classList.remove('mic-off');
+      micEl.classList.add('mic-listening');
+    }
+    // start audio monitor (permission prompt + level detection)
+    startAudioMonitor();
     recognition.start();
     state.isListening = true;
     alert("Listening... speak now.");
@@ -184,6 +195,124 @@ if(homeMic) homeMic.addEventListener('click', startListening);
 
 const driveMic = document.getElementById('d_micBtn');
 if(driveMic) driveMic.addEventListener('click', startListening);
+
+
+// Mic UI helper
+const micEl = document.getElementById('micCircle');
+function setMicStateMode(mode) {
+  // mode: 'off' | 'listening' | 'voice'
+  if (!micEl) return;
+  micEl.classList.remove('mic-off', 'mic-listening', 'mic-voice');
+  if (mode === 'off') {
+    micEl.classList.add('mic-off');
+    micEl.setAttribute('aria-pressed', 'false');
+  } else if (mode === 'listening') {
+    micEl.classList.add('mic-listening');
+    micEl.setAttribute('aria-pressed', 'true');
+  } else if (mode === 'voice') {
+    micEl.classList.add('mic-voice');
+    micEl.setAttribute('aria-pressed', 'true');
+  }
+  // update textual status
+  const statusEl = document.getElementById('micStatus');
+  if (statusEl) {
+    statusEl.classList.remove('mic-status--off', 'mic-status--listening', 'mic-status--voice', 'mic-status--error');
+    if (mode === 'off') { statusEl.textContent = 'Off'; statusEl.classList.add('mic-status--off'); }
+    else if (mode === 'listening') { statusEl.textContent = 'Listening (no voice)'; statusEl.classList.add('mic-status--listening'); }
+    else if (mode === 'voice') { statusEl.textContent = 'Voice detected'; statusEl.classList.add('mic-status--voice'); }
+    else { statusEl.textContent = 'Error'; statusEl.classList.add('mic-status--error'); }
+  }
+}
+
+// Speech recognition event wiring for visual feedback
+if (recognition) {
+  recognition.onstart = () => {
+    state.isListening = true;
+    setMicStateMode('listening');
+  };
+  recognition.onsoundstart = () => {
+    // any sound detected - treat as input present
+    setMicStateMode('voice');
+  };
+  recognition.onspeechstart = () => {
+    setMicStateMode('voice');
+  };
+  recognition.onspeechend = () => {
+    // speech ended; back to listening (no voice) until recognition ends
+    setMicStateMode('listening');
+  };
+  recognition.onend = () => {
+    state.isListening = false;
+    setMicStateMode('off');
+    stopAudioMonitor();
+  };
+  recognition.onaudioend = () => {
+    // if recognition still running but audio ended, show listening/no-voice
+    if (state.isListening) setMicStateMode('listening');
+  };
+  recognition.onerror = (ev) => {
+    console.error('Speech recognition error', ev.error);
+    state.isListening = false;
+    // indicate error/no voice
+    setMicStateMode('listening');
+    // also show error text briefly
+    const statusEl = document.getElementById('micStatus');
+    if (statusEl) { statusEl.textContent = 'Recognition error'; statusEl.classList.add('mic-status--error'); }
+    stopAudioMonitor();
+  };
+}
+
+// Audio level monitor using getUserMedia + AnalyserNode
+let _audioStream = null;
+let _audioCtx = null;
+let _analyser = null;
+let _dataArray = null;
+let _volInterval = null;
+function startAudioMonitor() {
+  if (_audioStream) return; // already running
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    _audioStream = stream;
+    try {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = _audioCtx.createMediaStreamSource(stream);
+      _analyser = _audioCtx.createAnalyser();
+      _analyser.fftSize = 512;
+      source.connect(_analyser);
+      _dataArray = new Uint8Array(_analyser.frequencyBinCount);
+      _volInterval = setInterval(() => {
+        _analyser.getByteTimeDomainData(_dataArray);
+        // compute normalized rms
+        let sum = 0;
+        for (let i = 0; i < _dataArray.length; i++) {
+          const v = (_dataArray[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / _dataArray.length);
+        // threshold tuned for typical laptop mic; adjust if too sensitive
+        const threshold = 0.02;
+        if (rms > threshold) setMicStateMode('voice');
+        else setMicStateMode('listening');
+      }, 120);
+    } catch (e) {
+      console.warn('AudioContext failed', e);
+    }
+  }).catch(err => {
+    console.warn('getUserMedia error', err);
+    const statusEl = document.getElementById('micStatus');
+    if (statusEl) { statusEl.textContent = 'Microphone blocked'; statusEl.classList.add('mic-status--error'); }
+  });
+}
+
+function stopAudioMonitor() {
+  if (_volInterval) { clearInterval(_volInterval); _volInterval = null; }
+  if (_analyser) { _analyser.disconnect && _analyser.disconnect(); _analyser = null; }
+  if (_audioCtx) { try { _audioCtx.close(); } catch(e) {} _audioCtx = null; }
+  if (_audioStream) {
+    _audioStream.getTracks().forEach(t => t.stop());
+    _audioStream = null;
+  }
+}
 
 
 // --- Contact Logic ---
