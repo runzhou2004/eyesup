@@ -241,6 +241,9 @@ function broadcastMessage(msg) {
 
 // Serve frontend static files (so visiting / will return the SPA)
 const frontendDir = path.join(__dirname, "..", "frontend");
+// Serve repo-level `src` assets (e.g. /src/assets/logo.png)
+const repoSrcDir = path.join(__dirname, "..", "src");
+app.use('/src', express.static(repoSrcDir));
 app.use(express.static(frontendDir));
 
 // SPA fallback: if the request isn't for /api, return index.html so client-side routing works
