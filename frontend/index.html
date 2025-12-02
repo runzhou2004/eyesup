@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>EyesUp Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>EyesUp</h1>
+      <div id="nav">
+        <button data-page="home">Home</button>
+        <button data-page="contacts">Contacts</button>
+        <button data-page="keywords">Keywords</button>
+        <button data-page="settings">Settings</button>
+        <button data-page="drive">Drive Mode</button>
+        <button id="logoutBtn">Log Out</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="loginView" class="page hidden">
+        <h2>Log In</h2>
+        <input id="email" placeholder="email" value="test@example.com"/>
+        <input id="password" type="password" placeholder="password" value="password"/>
+        <button id="loginBtn">Log in</button>
+        <p class="muted">Demo credentials: test@example.com / password</p>
+      </section>
+
+      <section id="homeView" class="page hidden">
+        <h2>Home</h2>
+        <div id="messages"></div>
+        <div id="controls">
+          <button id="micBtn">🎤 Start Speak</button>
+          <button id="simulateBtn">📩 Simulate Incoming</button>
+        </div>
+      </section>
+
+      <section id="contactsView" class="page hidden">
+        <h2>Contacts</h2>
+        <div id="contactsList"></div>
+        <h3>Add Contact</h3>
+        <input id="c_name" placeholder="Name"/>
+        <input id="c_number" placeholder="Number"/>
+        <button id="addContactBtn">Add</button>
+      </section>
+
+      <section id="keywordsView" class="page hidden">
+        <h2>Keywords</h2>
+        <textarea id="kwText" placeholder="Comma separated keywords"></textarea>
+        <button id="saveKwBtn">Save Keywords</button>
+      </section>
+
+      <section id="settingsView" class="page hidden">
+        <h2>Settings</h2>
+        <label><input type="checkbox" id="s_autoDetect" /> Automatic Driving Detection</label><br>
+        <label><input type="checkbox" id="s_blockGroup" /> Block Group Messages</label><br>
+        <button id="saveSettingsBtn">Save</button>
+      </section>
+
+      <section id="driveView" class="page hidden">
+        <h2>Drive Mode</h2>
+        <div id="driveBanner">Drive mode active. App will read messages aloud and accept voice replies only.</div>
+        <button id="d_micBtn">🎙 Speak Reply</button>
+        <button id="d_exitBtn">Exit Drive Mode</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
