@@ -137,8 +137,16 @@ button.secondary {
   text-align: center;
   margin: 40px 0;
 }
-.logo-area svg { width: 80px; height: 80px; fill: var(--primary); }
-.logo-area img { width: 80px; height: 80px; object-fit: contain; display: inline-block; }
+.logo-area svg { width: 200px; height: 200px; fill: var(--primary); }
+.logo-area img { width: 200px; height: 200px; object-fit: contain; display: inline-block; }
+
+@media (max-width: 420px) {
+  .logo-area svg,
+  .logo-area img {
+    width: 140px;
+    height: 140px;
+  }
+}
 .social-login { margin-top: 30px; }
 .social-btn {
   display: flex;
@@ -150,6 +158,14 @@ button.secondary {
   margin-bottom: 10px;
   border-radius: 25px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#loginView #loginBtn {
+  width: auto;
+  display: block;
+  margin: 8px auto 0 auto;
+  padding: 10px 40px;
+  border-radius: 20px;
 }
 
 /* Home */
