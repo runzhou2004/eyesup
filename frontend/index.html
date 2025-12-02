@@ -62,30 +62,40 @@
         </div>
       </section>
 
-      <section id="contactsView" class="page hidden">
-        <input type="text" placeholder="Search contacts" style="background: #f3e5f5 url('data:image/svg+xml;utf8,<svg .../>') no-repeat 10px center; padding-left: 35px;">
+<section id="contactsView" class="page hidden">
+        <h2>Priority Contacts</h2>
         
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-          <button style="font-size:12px; padding:10px;">Import Contacts</button>
-          <button style="font-size:12px; padding:10px; background:#4A148C;">Edit Contacts</button>
+        <div style="background:white; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #eee;">
+          <h3 style="margin-top:0; font-size:14px;">Add New Contact</h3>
+          <div style="display:flex; gap:10px;">
+            <input id="new_c_name" placeholder="Name" style="margin-bottom:0;">
+            <input id="new_c_number" placeholder="Mobile Number" style="margin-bottom:0;">
+          </div>
+          <button id="addStandardBtn" style="margin-top:10px; width:100%;">Save Contact</button>
         </div>
 
-        <div id="contactsList">
-          <div class="contact-item"><div class="avatar">M</div><div>Mom</div></div>
-          <div class="contact-item"><div class="avatar">D</div><div>Dad</div></div>
-          <div class="contact-item"><div class="avatar">B</div><div>Boss</div></div>
-        </div>
+        <h3 style="font-size:14px; color:#888;">Your List</h3>
+        <div id="contactsList" style="margin-bottom:30px;">
+          </div>
 
         <h3>Add Temporary Contact</h3>
-        <div style="background:#fff; border:1px solid #eee; padding:15px; border-radius:12px;">
-           <label style="font-size:12px; color:#888;">Name</label>
-           <input id="c_name" placeholder="Value"/>
-           <label style="font-size:12px; color:#888;">Duration</label>
-           <div style="display:flex; gap:10px;">
-             <input type="text" placeholder="Start Time" style="width:50%">
-             <input type="text" placeholder="End Time" style="width:50%">
+        <div style="background:#f3e5f5; padding:15px; border-radius:12px; border:1px solid #e1bee7;">
+           <p style="font-size:12px; color:#666; margin-top:0;">Allow calls/texts from this person for a specific time window.</p>
+           
+           <input id="temp_c_name" placeholder="Name" style="background:white;">
+           <input id="temp_c_number" placeholder="Mobile Number" style="background:white;">
+           
+           <label style="font-size:12px; color:#4a148c; font-weight:bold;">Active From:</label>
+           <div style="display:flex; gap:10px; margin-bottom:10px;">
+             <input type="datetime-local" id="temp_start" style="background:white;">
            </div>
-           <button id="addContactBtn">Add</button>
+
+           <label style="font-size:12px; color:#4a148c; font-weight:bold;">Active Until:</label>
+           <div style="display:flex; gap:10px;">
+             <input type="datetime-local" id="temp_end" style="background:white;">
+           </div>
+           
+           <button id="addTempBtn" style="background:#4a148c; margin-top:10px;">Set Temporary Access</button>
         </div>
       </section>
 

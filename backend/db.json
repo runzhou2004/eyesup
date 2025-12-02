@@ -1,17 +1,11 @@
 {
   "users": [],
-  "contacts": [
-    {
-      "id": 1764637908798,
-      "name": "hi",
-      "number": "555-0199"
-    }
-  ],
+  "contacts": [],
   "tempContacts": [],
   "keywords": [
     {
-      "id": 1764637892832.8674,
-      "text": "hi",
+      "id": 1764639141838.3208,
+      "text": ":)",
       "active": true
     }
   ],

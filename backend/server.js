@@ -18,6 +18,11 @@ await db.read();
 // Ensure db.json exists and has data
 db.data ||= { users: [], messages: [], contacts: [], keywords: [], settings: {} };
 await db.write();
+// Reset contacts and keywords for each session (start fresh every server run)
+db.data.contacts = [];
+db.data.keywords = [];
+await db.write();
+console.log('Session reset: contacts and keywords cleared');
 // ------------------------------------------------
 
 const app = express();
@@ -110,15 +115,19 @@ app.get("/api/contacts", async (req, res) => {
   res.json(db.data.contacts || []);
 });
 
-// Post contact (Removed authMiddleware)
+// Post contact (Handles both Standard and Temporary)
 app.post("/api/contacts", async (req, res) => {
-  const { name, number } = req.body;
-  if (!name) return res.status(400).json({ error: "name required" });
+  const { name, number, type, startTime, endTime } = req.body;
+  
+  if (!name) return res.status(400).json({ error: "Name is required" });
   
   const contact = {
     id: Date.now(),
     name,
-    number: number || "No number"
+    number: number || "",
+    type: type || "permanent", // 'permanent' or 'temporary'
+    startTime: startTime || null,
+    endTime: endTime || null
   };
   
   await db.read();
@@ -139,22 +148,42 @@ app.get("/api/keywords", async (req, res) => {
 
 // Post keywords (Updated logic)
 app.post("/api/keywords", async (req, res) => {
-  const { text } = req.body; // Frontend sends { text: "urgent, home" }
-  
-  if (!text) return res.status(400).json({ error: "Text required" });
+  // Accept multiple payload shapes for compatibility with different frontends:
+  // - Array of keyword objects: [{ text: 'urgent', active: true }, ...]
+  // - Object with `text` string: { text: 'urgent, home' }
+  // - Raw comma-separated string in body
+  const payload = req.body;
 
-  // Split string into individual keyword objects
-  const newKeywords = text.split(',').map(k => ({
-    id: Date.now() + Math.random(), 
-    text: k.trim(), 
-    active: true 
-  })).filter(k => k.text);
-  
+  if (!payload) return res.status(400).json({ error: "No keywords provided" });
+
+  let newKeywords = [];
+  if (Array.isArray(payload)) {
+    newKeywords = payload.map(k => ({
+      id: Date.now() + Math.random(),
+      text: (k && (k.text || k)).toString().trim(),
+      active: k && typeof k.active !== 'undefined' ? !!k.active : true
+    })).filter(k => k.text);
+  } else if (typeof payload === 'object' && typeof payload.text === 'string') {
+    newKeywords = payload.text.split(',').map(k => ({
+      id: Date.now() + Math.random(),
+      text: k.trim(),
+      active: true
+    })).filter(k => k.text);
+  } else if (typeof payload === 'string') {
+    newKeywords = payload.split(',').map(k => ({
+      id: Date.now() + Math.random(),
+      text: k.trim(),
+      active: true
+    })).filter(k => k.text);
+  } else {
+    return res.status(400).json({ error: 'Invalid payload for keywords' });
+  }
+
   await db.read();
   db.data.keywords ||= [];
   db.data.keywords.push(...newKeywords);
   await db.write();
-  
+
   res.json({ success: true, keywords: newKeywords });
 });
 
