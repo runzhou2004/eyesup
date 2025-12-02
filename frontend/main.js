@@ -128,9 +128,23 @@ window.logout = function() {
 document.addEventListener('DOMContentLoaded', () => {
   const mt = document.getElementById('menuToggle');
   if (mt) mt.hidden = !isAuthenticated;
+  // If the user info is available in localStorage, log it
+  if (isAuthenticated) {
+    try {
+      const rawUser = localStorage.getItem('eyesup_user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        console.log('User logged in:', u.email || u.name || demoToken);
+      } else {
+        console.log('User logged in:', demoToken);
+      }
+    } catch (e) {
+      console.log('User logged in:', demoToken);
+    }
+  }
 });
 
-
+ 
 // --- Chat/Home Logic ---
 function addMessageToUI(text, type) {
   const container = document.getElementById('messages');
