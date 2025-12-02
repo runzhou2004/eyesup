@@ -117,7 +117,7 @@ app.get("/api/contacts", async (req, res) => {
 
 // Post contact (Handles both Standard and Temporary)
 app.post("/api/contacts", async (req, res) => {
-  const { name, number, type, startTime, endTime } = req.body;
+  const { name, number, type, startTime, endTime, priority } = req.body;
   
   if (!name) return res.status(400).json({ error: "Name is required" });
   
@@ -127,7 +127,8 @@ app.post("/api/contacts", async (req, res) => {
     number: number || "",
     type: type || "permanent", // 'permanent' or 'temporary'
     startTime: startTime || null,
-    endTime: endTime || null
+    endTime: endTime || null,
+    priority: priority || "normal"
   };
   
   await db.read();
@@ -136,6 +137,18 @@ app.post("/api/contacts", async (req, res) => {
   await db.write();
   
   res.json(contact);
+});
+
+// Delete contact
+app.delete("/api/contacts/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.read();
+  db.data.contacts ||= [];
+  const idx = db.data.contacts.findIndex(c => c.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Contact not found" });
+  const removed = db.data.contacts.splice(idx, 1)[0];
+  await db.write();
+  res.json({ success: true, removed });
 });
 
 // ========== KEYWORDS ENDPOINTS ==========
@@ -185,6 +198,23 @@ app.post("/api/keywords", async (req, res) => {
   await db.write();
 
   res.json({ success: true, keywords: newKeywords });
+});
+
+// Replace keywords (full update)
+app.put("/api/keywords", async (req, res) => {
+  const payload = req.body;
+  if (!Array.isArray(payload)) return res.status(400).json({ error: "Expected array of keywords" });
+  const clean = payload.map(k => ({
+    id: k.id || Date.now() + Math.random(),
+    text: (k.text || '').toString().trim(),
+    active: typeof k.active !== 'undefined' ? !!k.active : true,
+    priority: k.priority || 'normal'
+  })).filter(k => k.text);
+
+  await db.read();
+  db.data.keywords = clean;
+  await db.write();
+  res.json({ success: true, keywords: clean });
 });
 
 // ========== SETTINGS ENDPOINTS ==========

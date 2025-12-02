@@ -26,12 +26,12 @@
     <aside id="sideMenu" class="side-menu" aria-hidden="true">
       <div class="side-menu-inner">
         <div id="nav">
-          <button id="logoutBtn" data-page="login" onclick="logout()">Log Out</button>
           <button data-page="home">Home</button>
           <button data-page="contacts">Contacts</button>
-          <button data-page="keywords">Keys</button>
+          <button data-page="keywords">Keywords</button>
           <button data-page="settings">Settings</button>
           <button data-page="drive">Drive</button>
+          <button id="logoutBtn" class="logout-btn" data-page="login" onclick="logout()">Log Out</button>
         </div>
       </div>
     </aside>
@@ -77,7 +77,7 @@
         </div>
       </section>
 
-<section id="contactsView" class="page hidden">
+      <section id="contactsView" class="page hidden">
         <h2>Priority Contacts</h2>
         
         <div style="background:white; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #eee;">
@@ -85,6 +85,13 @@
           <div style="display:flex; gap:10px;">
             <input id="new_c_name" placeholder="Name" style="margin-bottom:0;">
             <input id="new_c_number" placeholder="Mobile Number" style="margin-bottom:0;">
+          </div>
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <select id="new_c_priority" style="margin-bottom:0; background:white; border:1px solid #eee;">
+              <option value="normal">Normal</option>
+              <option value="priority">Priority</option>
+              <option value="emergency">Emergency</option>
+            </select>
           </div>
           <button id="addStandardBtn" style="margin-top:10px; width:100%;">Save Contact</button>
         </div>
@@ -99,6 +106,11 @@
            
            <input id="temp_c_name" placeholder="Name" style="background:white;">
            <input id="temp_c_number" placeholder="Mobile Number" style="background:white;">
+           <select id="temp_c_priority" style="background:white; border:1px solid #eee; margin-bottom:8px;">
+             <option value="normal">Normal</option>
+             <option value="priority">Priority</option>
+             <option value="emergency">Emergency</option>
+           </select>
            
            <label style="font-size:12px; color:#4a148c; font-weight:bold;">Active From:</label>
            <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -115,16 +127,10 @@
       </section>
 
       <section id="keywordsView" class="page hidden">
-        <input type="text" placeholder="Search keywords">
-        
-        <div class="contact-item" style="justify-content:space-between; background:transparent; border-bottom:1px solid #eee;">
-           <span>Urgent</span>
-           <input type="checkbox" checked>
-        </div>
-        <div class="contact-item" style="justify-content:space-between; background:transparent; border-bottom:1px solid #eee;">
-           <span>Emergency</span>
-           <input type="checkbox" checked>
-        </div>
+        <p class="muted" style="text-align:left; margin-top:0;">Active keywords flag messages as important (Drive Mode auto-reads those). Set priority to emphasize urgency.</p>
+        <input id="kwSearch" type="text" placeholder="Search keywords">
+        <div id="kwActiveCount" class="muted" style="text-align:left; margin:6px 0 12px 0;">0 active</div>
+        <div id="keywordsList"></div>
 
         <h3>Add new keywords</h3>
         <textarea id="kwText" placeholder="Comma separated list" style="height:80px;"></textarea>
@@ -157,7 +163,7 @@
         <div class="setting-row">
           <span>Speak Emojis as Words</span>
           <label class="switch">
-            <input type="checkbox" checked>
+            <input type="checkbox" id="s_speakEmojis" checked>
             <span class="slider"></span>
           </label>
         </div>
@@ -167,6 +173,7 @@
 
       <section id="driveView" class="page hidden">
         <div class="drive-mode-container">
+          <div id="driveMicStatus" class="mic-status" aria-live="polite">Off</div>
           <p style="color:#666;">Say "Hey EyesUp" or press the microphone to start.</p>
           
           <div class="big-mic" id="d_micBtn">
@@ -175,8 +182,44 @@
 
           <button id="d_exitBtn" class="secondary" style="width:auto; margin-top:30px; border:none; color:#888;">Exit Drive Mode</button>
         </div>
+
+        <div class="drive-updates">
+          <div class="drive-card">
+            <div class="drive-card__header">
+              <h3 style="margin:0;">Live Updates</h3>
+              <span id="driveLiveCount" class="pill pill--priority" style="display:none;"></span>
+            </div>
+            <div id="driveLiveList" class="drive-list muted"></div>
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <button id="drivePreviewUpdatesBtn" class="chip-btn" style="width:auto;">Preview updates</button>
+            </div>
+            <p class="muted small" style="margin:6px 0 0;">Hidden until preview. Say "show updates" for a modal, or "read messages" to hear them.</p>
+          </div>
+
+          <div class="drive-card">
+            <h3 style="margin-top:0;">Current Conversation</h3>
+            <button id="drivePreviewConvoBtn" class="chip-btn" style="width:auto;">Preview conversation</button>
+            <p class="muted small" style="margin:6px 0 0;">Hidden until preview. Say "show conversation" for a modal, or "read conversation" to hear it.</p>
+          </div>
+
+          <div class="drive-card">
+            <h3 style="margin-top:0;">Suggested Messages</h3>
+            <button id="drivePreviewSuggestionsBtn" class="chip-btn" style="width:auto;">Preview suggestions</button>
+            <p class="muted small" style="margin:6px 0 0;">Hidden until preview. Say "show suggestions" to open a quick list, or "read suggestions" to hear them.</p>
+          </div>
+        </div>
       </section>
     </main>
+  </div>
+
+  <div id="modalOverlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal">
+      <div class="modal__header">
+        <h3 id="modalTitle" style="margin:0;">Preview</h3>
+        <button id="modalClose" class="chip-btn" style="width:auto;">Close</button>
+      </div>
+      <div id="modalBody" class="modal__body"></div>
+    </div>
   </div>
 
   <script src="main.js"></script>
