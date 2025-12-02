@@ -138,6 +138,7 @@ button.secondary {
   margin: 40px 0;
 }
 .logo-area svg { width: 80px; height: 80px; fill: var(--primary); }
+.logo-area img { width: 80px; height: 80px; object-fit: contain; display: inline-block; }
 .social-login { margin-top: 30px; }
 .social-btn {
   display: flex;
