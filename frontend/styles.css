@@ -21,6 +21,9 @@ body {
   min-height: 100vh;
 }
 
+/* Ensure the `hidden` attribute is honored even when author CSS sets display */
+[hidden] { display: none !important; }
+
 html { font-family: var(--mobile-font); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 /* Make form controls and SVG elements inherit the mobile font */
@@ -154,6 +157,65 @@ button.secondary {
     height: 140px;
   }
 }
+
+/* Menu toggle button (top-right) */
+#menuToggle {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#menuToggle .material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  font-size: 22px;
+  line-height: 1;
+  display: inline-block;
+}
+
+header { padding: 12px 14px; }
+
+/* Slide-in side menu */
+.side-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 280px;
+  max-width: 85%;
+  background: white;
+  box-shadow: -8px 0 30px rgba(0,0,0,0.12);
+  transform: translateX(100%);
+  transition: transform 280ms cubic-bezier(.2,.9,.2,1);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+.side-menu.open {
+  transform: translateX(0);
+}
+.side-menu .side-menu-inner { display:flex; flex-direction:column; gap:10px; }
+.side-menu #nav { display:flex; flex-direction:column; gap:8px; }
+.side-menu #nav button { width:100%; text-align:left; padding:12px 14px; border-radius:10px; background: #f7f7fb; color: var(--primary); }
+
+/* overlay when menu open */
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.24);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 50;
+}
+.menu-overlay.open { opacity: 1; pointer-events: auto; }
 .social-login { margin-top: 30px; }
 .social-btn {
   display: flex;

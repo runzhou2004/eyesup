@@ -5,21 +5,32 @@
   <title>EyesUp</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=menu" />
   <link rel="icon" href="/src/assets/logo.ico" />
 </head>
 <body>
   <div id="app">
     <header>
       <h1>EyesUp!</h1>
-      <div id="nav">
-        <button data-page="login">Log Out</button>
-        <button data-page="home">Home</button>
-        <button data-page="contacts">Contacts</button>
-        <button data-page="keywords">Keys</button>
-        <button data-page="settings">Settings</button>
-        <button data-page="drive">Drive</button>
-      </div>
+      <button id="menuToggle" aria-label="Open menu" aria-expanded="false">
+        <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+      </button>
     </header>
+
+    <!-- Slide-in side menu (keeps existing #nav buttons) -->
+    <aside id="sideMenu" class="side-menu" aria-hidden="true">
+      <div class="side-menu-inner">
+        <div id="nav">
+          <button id="logoutBtn" data-page="login" onclick="logout()">Log Out</button>
+          <button data-page="home">Home</button>
+          <button data-page="contacts">Contacts</button>
+          <button data-page="keywords">Keys</button>
+          <button data-page="settings">Settings</button>
+          <button data-page="drive">Drive</button>
+        </div>
+      </div>
+    </aside>
+    <div id="menuOverlay" class="menu-overlay" tabindex="-1"></div>
 
     <main>
       <section id="loginView" class="page">

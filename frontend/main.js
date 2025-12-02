@@ -46,10 +46,88 @@ function switchPage(pageName) {
   // Refresh data when entering pages
   if (pageName === 'contacts') loadContacts();
   if (pageName === 'keywords') loadKeywords();
+
+  // When navigating to the login page, treat it as logout (hide menu and clear auth)
+  if (pageName === 'login') {
+    demoToken = null;
+    try { localStorage.removeItem('eyesup_token'); } catch(e) {}
+    isAuthenticated = false;
+    const mt = document.getElementById('menuToggle');
+    if (mt) mt.hidden = true;
+    // close menu if open
+    if (typeof closeMenu === 'function') closeMenu();
+  } else {
+    // show menu toggle only when authenticated
+    const mt = document.getElementById('menuToggle');
+    if (mt) mt.hidden = !isAuthenticated;
+  }
 }
 
 document.querySelectorAll('#nav button').forEach(btn => {
   btn.addEventListener('click', (e) => switchPage(e.target.getAttribute('data-page')));
+});
+
+// Menu toggle behavior: open/close slide-in menu
+const menuToggle = document.getElementById('menuToggle');
+const sideMenu = document.getElementById('sideMenu');
+const menuOverlay = document.getElementById('menuOverlay');
+
+function openMenu() {
+  if (!sideMenu) return;
+  sideMenu.classList.add('open');
+  menuOverlay && menuOverlay.classList.add('open');
+  menuToggle && menuToggle.setAttribute('aria-expanded', 'true');
+  sideMenu.setAttribute('aria-hidden', 'false');
+}
+
+function closeMenu() {
+  if (!sideMenu) return;
+  sideMenu.classList.remove('open');
+  menuOverlay && menuOverlay.classList.remove('open');
+  menuToggle && menuToggle.setAttribute('aria-expanded', 'false');
+  sideMenu.setAttribute('aria-hidden', 'true');
+}
+
+if (menuToggle) {
+  menuToggle.addEventListener('click', () => {
+    if (sideMenu.classList.contains('open')) closeMenu(); else openMenu();
+  });
+}
+
+if (menuOverlay) {
+  menuOverlay.addEventListener('click', () => closeMenu());
+}
+
+// Close menu when selecting a nav item
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (!target) return;
+  if (target.closest && target.closest('#nav')) {
+    // small delay so page switch takes effect then menu closes
+    setTimeout(closeMenu, 120);
+  }
+});
+
+// Close with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
+});
+
+// Logout helper to clear token and hide menu
+window.logout = function() {
+  demoToken = null;
+  try { localStorage.removeItem('eyesup_token'); } catch(e) {}
+  isAuthenticated = false;
+  const mt = document.getElementById('menuToggle');
+  if (mt) mt.hidden = true;
+  if (typeof closeMenu === 'function') closeMenu();
+  switchPage('login');
+};
+
+// Ensure menu toggle visibility matches auth state on load
+document.addEventListener('DOMContentLoaded', () => {
+  const mt = document.getElementById('menuToggle');
+  if (mt) mt.hidden = !isAuthenticated;
 });
 
 
@@ -96,8 +174,10 @@ if(driveMic) driveMic.addEventListener('click', startListening);
 
 // --- Contact Logic ---
 // simple auth token stored here after login
-// Load token from storage or use demo token for demo mode so actions work without explicit login
-let demoToken = localStorage.getItem('eyesup_token') || 'demo-token-123';
+// Load token from storage if present (treat 'demo-token-123' as not authenticated)
+const storedToken = localStorage.getItem('eyesup_token');
+let demoToken = storedToken && storedToken !== 'demo-token-123' ? storedToken : null;
+let isAuthenticated = !!demoToken;
 
 // helper to call authenticated endpoints
 async function authFetch(path, opts = {}) {
@@ -329,10 +409,15 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     });
     const body = await r.json();
     if (r.ok && body.token) {
-      demoToken = body.token;
-      switchPage('home');
-      loadContacts();
-      loadKeywords();
+        demoToken = body.token;
+        // persist token and mark authenticated
+        try { localStorage.setItem('eyesup_token', demoToken); } catch(e) {}
+        isAuthenticated = true;
+        const mt = document.getElementById('menuToggle');
+        if (mt) mt.hidden = false;
+        switchPage('home');
+        loadContacts();
+        loadKeywords();
     } else {
       alert(body.error || 'login failed');
     }
