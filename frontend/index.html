@@ -2,69 +2,152 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>EyesUp Demo</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EyesUp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
     <header>
-      <h1>EyesUp</h1>
+      <h1>EyesUp!</h1>
       <div id="nav">
+        <button data-page="login">Log Out</button>
         <button data-page="home">Home</button>
         <button data-page="contacts">Contacts</button>
-        <button data-page="keywords">Keywords</button>
+        <button data-page="keywords">Keys</button>
         <button data-page="settings">Settings</button>
-        <button data-page="drive">Drive Mode</button>
-        <button id="logoutBtn">Log Out</button>
+        <button data-page="drive">Drive</button>
       </div>
     </header>
 
     <main>
-      <section id="loginView" class="page hidden">
-        <h2>Log In</h2>
-        <input id="email" placeholder="email" value="test@example.com"/>
-        <input id="password" type="password" placeholder="password" value="password"/>
-        <button id="loginBtn">Log in</button>
-        <p class="muted">Demo credentials: test@example.com / password</p>
+      <section id="loginView" class="page">
+        <div class="logo-area">
+          <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          <h2>Welcome to EyesUp!</h2>
+        </div>
+        
+        <input id="email" placeholder="Username or email" value="test@example.com"/>
+        <input id="password" type="password" placeholder="Password" value="password"/>
+        <button id="loginBtn" style="width: auto; padding: 10px 40px; border-radius: 20px;">GO</button>
+        
+        <div class="social-login">
+          <button class="social-btn">Sign up with Google</button>
+          <button class="social-btn">Sign up with Apple</button>
+        </div>
       </section>
 
       <section id="homeView" class="page hidden">
-        <h2>Home</h2>
-        <div id="messages"></div>
-        <div id="controls">
-          <button id="micBtn">🎤 Start Speak</button>
-          <button id="simulateBtn">📩 Simulate Incoming</button>
+        <div class="mic-container">
+          <div class="mic-circle">
+             <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+          </div>
+        </div>
+        <p style="text-align:center; color:#888; margin-top:-10px; font-size:12px;">Say "Hey EyesUp" to start</p>
+
+        <h3>Suggested Messages</h3>
+        <div class="suggested-messages">
+          <div class="msg-chip"><strong>Mom:</strong> 9:41 AM - Are you coming home?</div>
+          <div class="msg-chip"><strong>Boss:</strong> 10:32 AM - Meeting moved to Tuesday.</div>
+        </div>
+
+        <h3>Current Conversation</h3>
+        <div id="messages">
+          <div class="chat-bubble incoming">Hey! Pick me up from school?</div>
+          <div class="chat-bubble outgoing">On my way, be there in 5.</div>
+        </div>
+        
+        <div id="controls" style="margin-top:20px;">
+          <button id="simulateBtn" class="secondary">📩 Simulate Incoming</button>
         </div>
       </section>
 
       <section id="contactsView" class="page hidden">
-        <h2>Contacts</h2>
-        <div id="contactsList"></div>
-        <h3>Add Contact</h3>
-        <input id="c_name" placeholder="Name"/>
-        <input id="c_number" placeholder="Number"/>
-        <button id="addContactBtn">Add</button>
+        <input type="text" placeholder="Search contacts" style="background: #f3e5f5 url('data:image/svg+xml;utf8,<svg .../>') no-repeat 10px center; padding-left: 35px;">
+        
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+          <button style="font-size:12px; padding:10px;">Import Contacts</button>
+          <button style="font-size:12px; padding:10px; background:#4A148C;">Edit Contacts</button>
+        </div>
+
+        <div id="contactsList">
+          <div class="contact-item"><div class="avatar">M</div><div>Mom</div></div>
+          <div class="contact-item"><div class="avatar">D</div><div>Dad</div></div>
+          <div class="contact-item"><div class="avatar">B</div><div>Boss</div></div>
+        </div>
+
+        <h3>Add Temporary Contact</h3>
+        <div style="background:#fff; border:1px solid #eee; padding:15px; border-radius:12px;">
+           <label style="font-size:12px; color:#888;">Name</label>
+           <input id="c_name" placeholder="Value"/>
+           <label style="font-size:12px; color:#888;">Duration</label>
+           <div style="display:flex; gap:10px;">
+             <input type="text" placeholder="Start Time" style="width:50%">
+             <input type="text" placeholder="End Time" style="width:50%">
+           </div>
+           <button id="addContactBtn">Add</button>
+        </div>
       </section>
 
       <section id="keywordsView" class="page hidden">
-        <h2>Keywords</h2>
-        <textarea id="kwText" placeholder="Comma separated keywords"></textarea>
-        <button id="saveKwBtn">Save Keywords</button>
+        <input type="text" placeholder="Search keywords">
+        
+        <div class="contact-item" style="justify-content:space-between; background:transparent; border-bottom:1px solid #eee;">
+           <span>Urgent</span>
+           <input type="checkbox" checked>
+        </div>
+        <div class="contact-item" style="justify-content:space-between; background:transparent; border-bottom:1px solid #eee;">
+           <span>Emergency</span>
+           <input type="checkbox" checked>
+        </div>
+
+        <h3>Add new keywords</h3>
+        <textarea id="kwText" placeholder="Comma separated list" style="height:80px;"></textarea>
+        <button id="saveKwBtn">Save</button>
       </section>
 
       <section id="settingsView" class="page hidden">
-        <h2>Settings</h2>
-        <label><input type="checkbox" id="s_autoDetect" /> Automatic Driving Detection</label><br>
-        <label><input type="checkbox" id="s_blockGroup" /> Block Group Messages</label><br>
-        <button id="saveSettingsBtn">Save</button>
+        <div style="text-align:center; margin-bottom:20px;">
+          <div style="width:80px; height:80px; background:#e1bee7; border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:30px; color:#4a148c;">👤</div>
+        </div>
+        
+        <input value="John Doe" disabled style="text-align:center; background:white; border:1px solid #eee;">
+
+        <div class="setting-row">
+          <span>Automatic Driving Detection</span>
+          <label class="switch">
+            <input type="checkbox" id="s_autoDetect" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span>Block Group Messages</span>
+          <label class="switch">
+            <input type="checkbox" id="s_blockGroup">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span>Speak Emojis as Words</span>
+          <label class="switch">
+            <input type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <button id="saveSettingsBtn" style="margin-top:20px;">Save Changes</button>
       </section>
 
       <section id="driveView" class="page hidden">
-        <h2>Drive Mode</h2>
-        <div id="driveBanner">Drive mode active. App will read messages aloud and accept voice replies only.</div>
-        <button id="d_micBtn">🎙 Speak Reply</button>
-        <button id="d_exitBtn">Exit Drive Mode</button>
+        <div class="drive-mode-container">
+          <p style="color:#666;">Say "Hey EyesUp" or press the microphone to start.</p>
+          
+          <div class="big-mic" id="d_micBtn">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+          </div>
+
+          <button id="d_exitBtn" class="secondary" style="width:auto; margin-top:30px; border:none; color:#888;">Exit Drive Mode</button>
+        </div>
       </section>
     </main>
   </div>

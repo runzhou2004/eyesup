@@ -1,8 +1,36 @@
 {
   "users": [],
-  "contacts": [],
+  "contacts": [
+    {
+      "id": 1764637908798,
+      "name": "hi",
+      "number": "555-0199"
+    }
+  ],
   "tempContacts": [],
-  "keywords": [],
+  "keywords": [
+    {
+      "id": 1764637892832.8674,
+      "text": "hi",
+      "active": true
+    }
+  ],
   "settings": [],
-  "messages": []
+  "messages": [
+    {
+      "id": 1764636926382,
+      "from": "Last sender",
+      "text": "hello hello hello hello test test",
+      "timestamp": "2025-12-02T00:55:26.382Z",
+      "outgoing": true
+    },
+    {
+      "id": 1764636929807,
+      "from": "Mom",
+      "text": "Are you nearby? Pick me up ASAP.",
+      "isGroup": false,
+      "timestamp": "2025-12-02T00:55:29.807Z",
+      "outgoing": false
+    }
+  ]
 }
