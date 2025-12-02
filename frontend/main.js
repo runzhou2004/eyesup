@@ -1,7 +1,25 @@
 // --- Configuration & State ---
 const state = {
-  isListening: false
+  isListening: false,
+  messages: [],
+  liveEvents: [],
+  liveUnread: 0,
+  activePage: "login",
+  autoReadDrive: true,
+  sse: null,
+  keywords: [],
+  settings: {
+    autoDetect: true,
+    blockGroup: false,
+    speakEmojis: true
+  }
 };
+
+const suggestedMessages = [
+  { from: 'Mom', text: 'Are you coming home?', time: '9:41 AM' },
+  { from: 'Boss', text: 'Meeting moved to Tuesday.', time: '10:32 AM' },
+  { from: 'Friend', text: 'Coffee later?', time: '3:05 PM' }
+];
 
 // --- Browser Speech APIs ---
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -23,22 +41,14 @@ function speakText(text) {
 recognition.onresult = (event) => {
   const transcript = event.results[0][0].transcript;
   console.log("Heard:", transcript);
-  
-  // Add to chat as outgoing message
-  addMessageToUI(transcript, 'outgoing');
-  
-  // In a real app, you would POST this to /api/messages here
-  state.isListening = false;
-};
-
-recognition.onerror = (event) => {
-  console.error("Speech error:", event.error);
+  handleVoiceInput(transcript);
   state.isListening = false;
 };
 
 
 // --- Navigation Logic ---
 function switchPage(pageName) {
+  state.activePage = pageName;
   document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
   const target = document.getElementById(`${pageName}View`);
   if (target) target.classList.remove('hidden');
@@ -46,6 +56,8 @@ function switchPage(pageName) {
   // Refresh data when entering pages
   if (pageName === 'contacts') loadContacts();
   if (pageName === 'keywords') loadKeywords();
+  if (pageName === 'settings') loadSettings();
+  if ((pageName === 'home' || pageName === 'drive') && isAuthenticated && !state.messages.length) loadMessages();
 
   // When navigating to the login page, treat it as logout (hide menu and clear auth)
   if (pageName === 'login') {
@@ -118,6 +130,13 @@ window.logout = function() {
   demoToken = null;
   try { localStorage.removeItem('eyesup_token'); } catch(e) {}
   isAuthenticated = false;
+  disconnectSSE();
+  state.messages = [];
+  state.liveEvents = [];
+  state.settings = { autoDetect: true, blockGroup: false, speakEmojis: true };
+  applySettingsToUI();
+  renderConversation();
+  renderLiveUpdates();
   const mt = document.getElementById('menuToggle');
   if (mt) mt.hidden = true;
   if (typeof closeMenu === 'function') closeMenu();
@@ -144,31 +163,350 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // initialize mic UI
   try { setMicStateMode('off'); } catch(e) {}
+  applySettingsToUI();
 });
 
  
-// --- Chat/Home Logic ---
-function addMessageToUI(text, type) {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = `chat-bubble ${type}`;
-  div.innerText = text;
-  container.appendChild(div);
+// --- Chat/Home & Drive Messaging ---
+function formatTime(ts) {
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (_) {
+    return '';
+  }
+}
+
+function renderMessageList(targetId) {
+  const container = document.getElementById(targetId);
+  if (!container) return;
+  container.innerHTML = '';
+  if (!state.messages.length) {
+    container.innerHTML = '<div class="muted">No messages yet</div>';
+    return;
+  }
+  state.messages.forEach(msg => {
+    const div = document.createElement('div');
+    div.className = `chat-bubble ${msg.outgoing ? 'outgoing' : 'incoming'}`;
+    div.innerText = msg.text || '';
+    container.appendChild(div);
+  });
   container.scrollTop = container.scrollHeight;
 }
 
+function renderConversation() {
+  renderMessageList('messages');
+}
+
+function renderLiveUpdates() {
+  const container = document.getElementById('driveLiveList');
+  const badge = document.getElementById('driveLiveCount');
+  if (badge) {
+    if (state.liveUnread > 0) {
+      badge.style.display = 'inline-flex';
+      badge.textContent = `${state.liveUnread} new`;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  if (!container) return;
+  container.classList.add('muted');
+  container.innerHTML = '';
+}
+
+function addLiveEvent(msg) {
+  if (!msg) return;
+  const existingIdx = state.liveEvents.findIndex(e => e.id === msg.id);
+  if (existingIdx !== -1) return;
+  state.liveEvents.push({
+    id: msg.id || Date.now(),
+    from: msg.from || 'Unknown',
+    text: msg.text || '',
+    timestamp: msg.timestamp || new Date().toISOString()
+  });
+  if (!msg.outgoing) state.liveUnread += 1;
+  if (state.liveEvents.length > 12) {
+    state.liveEvents = state.liveEvents.slice(-12);
+  }
+  renderLiveUpdates();
+}
+
+function addMessage(msg) {
+  if (!msg) return;
+  const normalized = {
+    id: msg.id || Date.now(),
+    from: msg.from || 'Unknown',
+    text: msg.text || '',
+    outgoing: !!msg.outgoing,
+    timestamp: msg.timestamp || new Date().toISOString(),
+    isGroup: !!msg.isGroup
+  };
+  const idx = state.messages.findIndex(m => m.id === normalized.id);
+  if (idx >= 0) state.messages[idx] = normalized; else state.messages.push(normalized);
+  state.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  renderConversation();
+}
+
+function speakLatestMessages(count = 3) {
+  if (!state.messages.length) {
+    speakText('No messages yet.');
+    return;
+  }
+  const recent = state.messages.slice(-count);
+  const combined = recent.map(m => `${m.outgoing ? 'You said' : (m.from || 'Unknown sender')} ${m.text}`).join('. ');
+  speakText(combined);
+}
+
+async function loadMessages() {
+  if (!isAuthenticated) return;
+  try {
+    const res = await authFetch('/api/messages');
+    const arr = await res.json();
+    state.messages = Array.isArray(arr) ? arr : [];
+    state.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    renderConversation();
+  } catch (e) {
+    console.warn('Failed to load messages', e);
+  }
+}
+
+function handleIncomingMessage(msg) {
+  addMessage(msg);
+  addLiveEvent(msg);
+  if (state.activePage === 'drive' && state.autoReadDrive && !msg.outgoing) {
+    const shouldRead = messageMatchesActiveKeywords(msg);
+    if (shouldRead) speakText(`New from ${msg.from || 'unknown'}: ${msg.text}`);
+  }
+}
+
+function messageMatchesActiveKeywords(msg) {
+  const active = state.keywords.filter(k => k.active && k.text);
+  if (!active.length) return true; // no filter set, read everything
+  const text = (msg.text || '').toLowerCase();
+  return active.some(k => text.includes((k.text || '').toLowerCase()));
+}
+
+function handleVoiceCommand(original, lowered) {
+  if (lowered.includes('read') && (lowered.includes('message') || lowered.includes('messages') || lowered.includes('updates') || lowered.includes('conversation'))) {
+    // tailor which to read
+    if (lowered.includes('suggest')) {
+      const combined = suggestedMessages.map(s => `${s.from} says ${s.text}`).join('. ');
+      speakText(combined || 'No suggestions.');
+    } else if (lowered.includes('conversation')) {
+      speakLatestMessages(5);
+    } else {
+      speakLatestMessages();
+    }
+    return true;
+  }
+  if (lowered.includes('show') && (lowered.includes('update') || lowered.includes('updates'))) {
+    state.liveUnread = 0;
+    renderLiveUpdates();
+    openModal('Live Updates', renderUpdatesPreview());
+    return true;
+  }
+  if (lowered.includes('show') && lowered.includes('suggest')) {
+    openModal('Suggested Messages', renderSuggestionsPreview());
+    return true;
+  }
+  if (lowered.includes('show') && (lowered.includes('conversation') || lowered.includes('convo') || lowered.includes('chat'))) {
+    openModal('Current Conversation', renderConversationPreview());
+    return true;
+  }
+  if (lowered.includes('pause') && lowered.includes('read')) {
+    state.autoReadDrive = false;
+    speakText('Auto reading paused');
+    return true;
+  }
+  if (lowered.includes('resume') || (lowered.includes('auto') && lowered.includes('read'))) {
+    state.autoReadDrive = true;
+    speakText('Auto reading on');
+    return true;
+  }
+  if (lowered.startsWith('reply')) {
+    const stripped = original.replace(/reply\s*(to)?/i, '').trim();
+    if (stripped) {
+      sendOutgoing(stripped);
+    } else {
+      speakText('Say reply followed by your message');
+    }
+    return true;
+  }
+  return false;
+}
+
+async function handleVoiceInput(transcript) {
+  if (!transcript) return;
+  const lowered = transcript.toLowerCase();
+  if (handleVoiceCommand(transcript, lowered)) return;
+  await sendOutgoing(transcript);
+}
+
+async function sendOutgoing(text) {
+  if (!isAuthenticated) {
+    alert('Please log in to send messages');
+    return;
+  }
+  const lastIncoming = [...state.messages].reverse().find(m => !m.outgoing);
+  const to = lastIncoming?.from || 'Recent contact';
+  const payload = { to, text };
+  try {
+    const res = await authFetch('/api/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const body = await res.json();
+    addMessage(body || { ...payload, outgoing: true, id: Date.now(), timestamp: new Date().toISOString() });
+  } catch (e) {
+    addMessage({ ...payload, outgoing: true, id: Date.now(), timestamp: new Date().toISOString() });
+  }
+}
+
 // "Simulate Incoming" Button
-document.getElementById('simulateBtn').addEventListener('click', () => {
-  const texts = [
-    "Hey, are you driving?", 
-    "Don't forget to pick up milk.", 
-    "Meeting starts in 10 minutes!"
-  ];
-  const randomText = texts[Math.floor(Math.random() * texts.length)];
-  
-  addMessageToUI(randomText, 'incoming');
-  speakText(randomText); // <--- READS ALOUD
+const simulateBtn = document.getElementById('simulateBtn');
+if (simulateBtn) {
+  simulateBtn.addEventListener('click', async () => {
+    const texts = [
+      "Hey, are you driving?",
+      "Don't forget to pick up milk.",
+      "Meeting starts in 10 minutes!"
+    ];
+    const randomText = texts[Math.floor(Math.random() * texts.length)];
+    try {
+      const res = await authFetch('/api/incoming', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: 'Sim Contact', text: randomText, isGroup: false })
+      });
+      const msg = await res.json();
+      handleIncomingMessage(msg);
+    } catch (e) {
+      // fall back to local rendering
+      handleIncomingMessage({ id: Date.now(), from: 'Sim Contact', text: randomText, outgoing: false, timestamp: new Date().toISOString() });
+    }
+  });
+}
+
+const driveReadBtn = document.getElementById('driveReadBtn');
+async function handleDriveReadLatest() {
+  if (!isAuthenticated) {
+    alert('Please log in first.');
+    return;
+  }
+  if (!state.messages.length) {
+    await loadMessages();
+  }
+  if (!state.messages.length) {
+    alert('No messages yet.');
+    return;
+  }
+  state.liveUnread = 0;
+  renderLiveUpdates();
+  speakLatestMessages();
+}
+
+function renderUpdatesPreview() {
+  if (!state.liveEvents.length) return '<div class="muted">No updates yet</div>';
+  return state.liveEvents.slice(-10).reverse().map(evt => `
+    <div class="live-item">
+      <span>${evt.from ? `${evt.from}: ` : ''}${evt.text}</span>
+      <span class="time">${formatTime(evt.timestamp)}</span>
+    </div>
+  `).join('');
+}
+if (driveReadBtn) driveReadBtn.addEventListener('click', handleDriveReadLatest);
+
+// Modal helpers
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const modalClose = document.getElementById('modalClose');
+
+function openModal(title, html) {
+  if (!modalOverlay || !modalTitle || !modalBody) return;
+  modalTitle.textContent = title;
+  modalBody.innerHTML = html;
+  modalOverlay.classList.add('open');
+  modalOverlay.setAttribute('aria-hidden', 'false');
+}
+function closeModal() {
+  if (!modalOverlay) return;
+  modalOverlay.classList.remove('open');
+  modalOverlay.setAttribute('aria-hidden', 'true');
+}
+if (modalClose) modalClose.addEventListener('click', closeModal);
+if (modalOverlay) modalOverlay.addEventListener('click', (e) => {
+  if (e.target === modalOverlay) closeModal();
 });
+
+function renderConversationPreview() {
+  if (!state.messages.length) return '<div class="muted">No messages yet</div>';
+  return state.messages.slice(-8).reverse().map(m => `
+    <div class="chat-bubble ${m.outgoing ? 'outgoing' : 'incoming'}">${m.text || ''}</div>
+  `).join('');
+}
+
+function renderSuggestionsPreview() {
+  return suggestedMessages.map(s => `
+    <div class="live-item" style="border:1px solid #f0ebff; background:#f9f6ff;">
+      <div>
+        <strong>${s.from}</strong> <span class="muted small">${s.time}</span><br/>
+        ${s.text}
+      </div>
+    </div>
+  `).join('');
+}
+
+const drivePreviewConvoBtn = document.getElementById('drivePreviewConvoBtn');
+if (drivePreviewConvoBtn) drivePreviewConvoBtn.addEventListener('click', () => {
+  openModal('Current Conversation', renderConversationPreview());
+});
+
+const drivePreviewSuggestionsBtn = document.getElementById('drivePreviewSuggestionsBtn');
+if (drivePreviewSuggestionsBtn) drivePreviewSuggestionsBtn.addEventListener('click', () => {
+  openModal('Suggested Messages', renderSuggestionsPreview());
+});
+
+const drivePreviewUpdatesBtn = document.getElementById('drivePreviewUpdatesBtn');
+if (drivePreviewUpdatesBtn) drivePreviewUpdatesBtn.addEventListener('click', () => {
+  state.liveUnread = 0;
+  renderLiveUpdates();
+  openModal('Live Updates', renderUpdatesPreview());
+});
+
+function disconnectSSE() {
+  if (state.sse) {
+    try { state.sse.close(); } catch (_) {}
+    state.sse = null;
+  }
+}
+
+function connectSSE() {
+  if (!demoToken) return;
+  disconnectSSE();
+  try {
+    const es = new EventSource(`/api/stream?t=${encodeURIComponent(demoToken)}`);
+    state.sse = es;
+    es.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.status === 'connected') return;
+        handleIncomingMessage(payload);
+      } catch (err) {
+        console.warn('Failed to parse SSE message', err);
+      }
+    };
+    es.onerror = () => {
+      disconnectSSE();
+      if (isAuthenticated) {
+        setTimeout(connectSSE, 3000);
+      }
+    };
+  } catch (e) {
+    console.warn('SSE connection failed', e);
+  }
+}
 
 // "Mic" Buttons (Home & Drive Mode)
 const startListening = () => {
@@ -185,7 +523,6 @@ const startListening = () => {
     startAudioMonitor();
     recognition.start();
     state.isListening = true;
-    alert("Listening... speak now.");
   } catch (e) { console.error(e); }
 };
 
@@ -195,25 +532,42 @@ if(homeMic) homeMic.addEventListener('click', startListening);
 
 const driveMic = document.getElementById('d_micBtn');
 if(driveMic) driveMic.addEventListener('click', startListening);
+const driveExitBtn = document.getElementById('d_exitBtn');
+if (driveExitBtn) driveExitBtn.addEventListener('click', () => switchPage('home'));
 
 
 // Mic UI helper
 const micEl = document.getElementById('micCircle');
+const driveMicEl = document.getElementById('d_micBtn');
+const driveStatusEl = document.getElementById('driveMicStatus');
 function setMicStateMode(mode) {
   // mode: 'off' | 'listening' | 'voice'
-  if (!micEl) return;
-  micEl.classList.remove('mic-off', 'mic-listening', 'mic-voice');
-  if (mode === 'off') {
-    micEl.classList.add('mic-off');
-    micEl.setAttribute('aria-pressed', 'false');
-  } else if (mode === 'listening') {
-    micEl.classList.add('mic-listening');
-    micEl.setAttribute('aria-pressed', 'true');
-  } else if (mode === 'voice') {
-    micEl.classList.add('mic-voice');
-    micEl.setAttribute('aria-pressed', 'true');
+  if (micEl) {
+    micEl.classList.remove('mic-off', 'mic-listening', 'mic-voice');
+    if (mode === 'off') {
+      micEl.classList.add('mic-off');
+      micEl.setAttribute('aria-pressed', 'false');
+    } else if (mode === 'listening') {
+      micEl.classList.add('mic-listening');
+      micEl.setAttribute('aria-pressed', 'true');
+    } else if (mode === 'voice') {
+      micEl.classList.add('mic-voice');
+      micEl.setAttribute('aria-pressed', 'true');
+    }
   }
-  // update textual status
+  if (driveMicEl) {
+    driveMicEl.classList.remove('mic-off', 'mic-listening', 'mic-voice');
+    if (mode === 'off') {
+      driveMicEl.classList.add('mic-off');
+      driveMicEl.setAttribute('aria-pressed', 'false');
+    } else if (mode === 'listening') {
+      driveMicEl.classList.add('mic-listening');
+      driveMicEl.setAttribute('aria-pressed', 'true');
+    } else if (mode === 'voice') {
+      driveMicEl.classList.add('mic-voice');
+      driveMicEl.setAttribute('aria-pressed', 'true');
+    }
+  }
   const statusEl = document.getElementById('micStatus');
   if (statusEl) {
     statusEl.classList.remove('mic-status--off', 'mic-status--listening', 'mic-status--voice', 'mic-status--error');
@@ -221,6 +575,13 @@ function setMicStateMode(mode) {
     else if (mode === 'listening') { statusEl.textContent = 'Listening (no voice)'; statusEl.classList.add('mic-status--listening'); }
     else if (mode === 'voice') { statusEl.textContent = 'Voice detected'; statusEl.classList.add('mic-status--voice'); }
     else { statusEl.textContent = 'Error'; statusEl.classList.add('mic-status--error'); }
+  }
+  if (driveStatusEl) {
+    driveStatusEl.classList.remove('mic-status--off', 'mic-status--listening', 'mic-status--voice', 'mic-status--error');
+    if (mode === 'off') { driveStatusEl.textContent = 'Off'; driveStatusEl.classList.add('mic-status--off'); }
+    else if (mode === 'listening') { driveStatusEl.textContent = 'Listening (no voice)'; driveStatusEl.classList.add('mic-status--listening'); }
+    else if (mode === 'voice') { driveStatusEl.textContent = 'Voice detected'; driveStatusEl.classList.add('mic-status--voice'); }
+    else { driveStatusEl.textContent = 'Error'; driveStatusEl.classList.add('mic-status--error'); }
   }
 }
 
@@ -317,9 +678,9 @@ function stopAudioMonitor() {
 
 // --- Contact Logic ---
 // simple auth token stored here after login
-// Load token from storage if present (treat 'demo-token-123' as not authenticated)
+// Load token from storage if present
 const storedToken = localStorage.getItem('eyesup_token');
-let demoToken = storedToken && storedToken !== 'demo-token-123' ? storedToken : null;
+let demoToken = storedToken || null;
 let isAuthenticated = !!demoToken;
 
 // helper to call authenticated endpoints
@@ -333,6 +694,12 @@ async function authFetch(path, opts = {}) {
     // clear stored token and redirect to login
     localStorage.removeItem('eyesup_token');
     demoToken = null;
+    isAuthenticated = false;
+    disconnectSSE();
+    state.messages = [];
+    state.liveEvents = [];
+    renderConversation();
+    renderLiveUpdates();
     switchPage('login');
     throw new Error('unauthorized');
   }
@@ -354,6 +721,9 @@ async function loadContacts() {
   contacts.forEach(c => {
     const isTemp = c.type === 'temporary';
     const initial = c.name.charAt(0).toUpperCase();
+    const priority = c.priority || 'normal';
+    const pillClass = priority === 'emergency' ? 'pill pill--emergency' : priority === 'priority' ? 'pill pill--priority' : 'pill';
+    const priorityLabel = priority.charAt(0).toUpperCase() + priority.slice(1);
     
     // Formatting the date if it exists
     let timeString = '';
@@ -368,7 +738,8 @@ async function loadContacts() {
         <div style="flex:1;">
             <div style="font-weight:bold; display:flex; align-items:center;">
               ${c.name} 
-              ${isTemp ? '<span style="font-size:12px; margin-left:5px;">🕒</span>' : ''}
+              ${isTemp ? '<span style="font-size:12px; margin-left:5px;">TEMP</span>' : ''}
+              <span class="${pillClass}" style="margin-left:6px;">${priorityLabel}</span>
             </div>
             <div style="font-size:11px; color:#888">${c.number}</div>
             ${timeString}
@@ -384,6 +755,7 @@ async function loadContacts() {
 document.getElementById('addStandardBtn').addEventListener('click', async () => {
   const name = document.getElementById('new_c_name').value;
   const number = document.getElementById('new_c_number').value;
+  const priority = document.getElementById('new_c_priority')?.value || 'normal';
 
   if (!name || !number) return alert("Name and Number are required.");
 
@@ -393,7 +765,8 @@ document.getElementById('addStandardBtn').addEventListener('click', async () => 
     body: JSON.stringify({ 
       name, 
       number, 
-      type: 'permanent' 
+      type: 'permanent',
+      priority
     })
   });
 
@@ -428,6 +801,7 @@ document.getElementById('addTempBtn').addEventListener('click', async () => {
   const number = document.getElementById('temp_c_number').value;
   const start = document.getElementById('temp_start').value;
   const end = document.getElementById('temp_end').value;
+  const priority = document.getElementById('temp_c_priority')?.value || 'normal';
 
   if (!name || !end) return alert("Name and End Time are required for temporary contacts.");
 
@@ -439,7 +813,8 @@ document.getElementById('addTempBtn').addEventListener('click', async () => {
       number, 
       type: 'temporary',
       startTime: start,
-      endTime: end
+      endTime: end,
+      priority
     })
   });
 
@@ -480,34 +855,96 @@ window.deleteContact = async (id) => {
 
 
 // --- Keyword Logic ---
-async function loadKeywords() {
-  const res = await authFetch('/api/keywords');
-  const keywords = await res.json();
-  
-  // Find the container (reuse the list area or create a new one)
-  // For this demo, we will insert them into the keywordsView container
-  const container = document.getElementById('keywordsView');
-  
-  // Remove old keyword items (keep the input and button)
-  const oldItems = container.querySelectorAll('.keyword-item');
-  oldItems.forEach(el => el.remove());
-  // Helper to render keywords (clears oldItems before calling)
-  function renderKeywords(list) {
-    const textarea = container.querySelector('#kwText');
-    // Insert each item after the textarea so they appear below the input
-    list.forEach(k => {
-      const html = `
-      <div class="contact-item keyword-item" style="justify-content:space-between; background:transparent; border-bottom:1px solid #eee; padding:6px 0;">
-         <span>${k.text}</span>
-         <input type="checkbox" ${k.active ? 'checked' : ''}>
-      </div>
-      `;
-      if (textarea) textarea.insertAdjacentHTML('afterend', html);
-      else container.insertAdjacentHTML('beforeend', html);
-    });
+function renderKeywords() {
+  const container = document.getElementById('keywordsList');
+  if (!container) return;
+  const searchTerm = (document.getElementById('kwSearch')?.value || '').toLowerCase();
+  container.innerHTML = '';
+  const activeCount = state.keywords.filter(k => k.active).length;
+  const countEl = document.getElementById('kwActiveCount');
+  if (countEl) countEl.textContent = `${activeCount} active`;
+  const filtered = state.keywords.filter(k => !searchTerm || (k.text || '').toLowerCase().includes(searchTerm));
+  if (!filtered.length) {
+    container.innerHTML = '<div class="muted" style="padding:8px 0;">No keywords yet</div>';
+    return;
   }
+  filtered.forEach(k => {
+    const priority = k.priority || 'normal';
+    const row = document.createElement('div');
+    row.className = 'contact-item keyword-item';
+    row.style.justifyContent = 'space-between';
+    row.style.background = 'transparent';
+    row.style.borderBottom = '1px solid #eee';
+    row.style.padding = '6px 0';
+    row.innerHTML = `
+      <span style="display:flex; flex-direction:column; gap:4px;">
+        <strong>${k.text}</strong>
+        <small class="muted">Priority: ${k.priority || 'normal'}</small>
+      </span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <select class="kw-priority" data-id="${k.id}">
+          <option value="normal" ${priority === 'normal' ? 'selected' : ''}>Normal</option>
+          <option value="priority" ${priority === 'priority' ? 'selected' : ''}>Priority</option>
+          <option value="emergency" ${priority === 'emergency' ? 'selected' : ''}>Emergency</option>
+        </select>
+        <input type="checkbox" title="Active" data-id="${k.id}" ${k.active ? 'checked' : ''}>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
 
-  renderKeywords(keywords || []);
+async function persistKeywords() {
+  try {
+    await authFetch('/api/keywords', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.keywords)
+    });
+  } catch (e) {
+    alert('Failed to save keywords');
+  }
+}
+
+async function loadKeywords() {
+  try {
+    const res = await authFetch('/api/keywords');
+    const keywords = await res.json();
+    state.keywords = Array.isArray(keywords) ? keywords.map(k => ({
+      id: k.id || Date.now() + Math.random(),
+      text: k.text || '',
+      active: typeof k.active === 'undefined' ? true : !!k.active,
+      priority: k.priority || 'normal'
+    })) : [];
+    renderKeywords();
+  } catch (e) {
+    console.warn('Failed to load keywords', e);
+  }
+}
+
+document.getElementById('kwSearch')?.addEventListener('input', renderKeywords);
+
+const kwListEl = document.getElementById('keywordsList');
+if (kwListEl) {
+  kwListEl.addEventListener('change', (e) => {
+    const target = e.target;
+    if (target && target.matches('input[type="checkbox"][data-id]')) {
+      const id = Number(target.getAttribute('data-id'));
+      const idx = state.keywords.findIndex(k => Number(k.id) === id);
+      if (idx >= 0) {
+        state.keywords[idx].active = target.checked;
+        persistKeywords();
+      }
+    } else if (target && target.matches('select.kw-priority[data-id]')) {
+      const id = Number(target.getAttribute('data-id'));
+      const idx = state.keywords.findIndex(k => Number(k.id) === id);
+      if (idx >= 0) {
+        state.keywords[idx].priority = target.value || 'normal';
+        persistKeywords();
+        renderKeywords();
+      }
+    }
+  });
 }
 
 document.getElementById('saveKwBtn').addEventListener('click', async () => {
@@ -515,32 +952,76 @@ document.getElementById('saveKwBtn').addEventListener('click', async () => {
   if (!text) return;
 
   // split comma separated keywords into array of objects
-  const arr = text.split(',').map(s => s.trim()).filter(Boolean).map(t => ({ text: t, active: true }));
+  const arr = text.split(',').map(s => s.trim()).filter(Boolean).map(t => ({
+    id: Date.now() + Math.random(),
+    text: t,
+    active: true,
+    priority: 'normal'
+  }));
 
-  const res = await authFetch('/api/keywords', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(arr)
-  });
-
-  if (res.ok) {
-    const body = await res.json().catch(() => null);
-    alert("Keywords saved!");
-    document.getElementById('kwText').value = '';
-    // If server returned the newly created keywords, append them immediately
-    if (body && Array.isArray(body.keywords) && body.keywords.length) {
-      // render just the new ones by calling loadKeywords to ensure full sync
-      loadKeywords();
-    } else {
-      // fallback: reload full list
-      loadKeywords();
-    }
-  } else {
-    alert('Failed to save keywords');
-  }
+  state.keywords.push(...arr);
+  document.getElementById('kwText').value = '';
+  renderKeywords();
+  await persistKeywords();
 });
 
+// --- Settings Logic ---
+function applySettingsToUI() {
+  const autoDetect = document.getElementById('s_autoDetect');
+  const blockGroup = document.getElementById('s_blockGroup');
+  const speakEmojis = document.getElementById('s_speakEmojis');
+  if (autoDetect) autoDetect.checked = !!state.settings.autoDetect;
+  if (blockGroup) blockGroup.checked = !!state.settings.blockGroup;
+  if (speakEmojis) speakEmojis.checked = !!state.settings.speakEmojis;
+}
+
+async function loadSettings() {
+  if (!isAuthenticated) return;
+  try {
+    const res = await authFetch('/api/settings');
+    const data = await res.json();
+    state.settings = { ...state.settings, ...(data || {}) };
+    applySettingsToUI();
+  } catch (e) {
+    console.warn('Failed to load settings', e);
+  }
+}
+
+async function saveSettings() {
+  const autoDetect = document.getElementById('s_autoDetect')?.checked || false;
+  const blockGroup = document.getElementById('s_blockGroup')?.checked || false;
+  const speakEmojis = document.getElementById('s_speakEmojis')?.checked || false;
+  state.settings = { autoDetect, blockGroup, speakEmojis };
+  try {
+    const res = await authFetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.settings)
+    });
+    if (res.ok) alert('Settings saved'); else alert('Failed to save settings');
+  } catch (e) {
+    alert('Failed to save settings');
+  }
+}
+
+document.getElementById('saveSettingsBtn')?.addEventListener('click', saveSettings);
+
 // --- Login Logic ---
+function handleLoginSuccess(token) {
+  if (!token) return;
+  demoToken = token;
+  try { localStorage.setItem('eyesup_token', demoToken); } catch(e) {}
+  isAuthenticated = true;
+  const mt = document.getElementById('menuToggle');
+  if (mt) mt.hidden = false;
+  connectSSE();
+  loadContacts();
+  loadKeywords();
+  loadSettings();
+  loadMessages();
+  switchPage('home');
+}
+
 document.getElementById('loginBtn').addEventListener('click', async () => {
   const email = document.getElementById('email')?.value || 'test@example.com';
   const password = document.getElementById('password')?.value || 'password';
@@ -552,15 +1033,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     });
     const body = await r.json();
     if (r.ok && body.token) {
-        demoToken = body.token;
-        // persist token and mark authenticated
-        try { localStorage.setItem('eyesup_token', demoToken); } catch(e) {}
-        isAuthenticated = true;
-        const mt = document.getElementById('menuToggle');
-        if (mt) mt.hidden = false;
-        switchPage('home');
-        loadContacts();
-        loadKeywords();
+        handleLoginSuccess(body.token);
     } else {
       alert(body.error || 'login failed');
     }
@@ -570,4 +1043,8 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 });
 
 // Start
-switchPage('login');
+if (isAuthenticated) {
+  handleLoginSuccess(demoToken);
+} else {
+  switchPage('login');
+}
