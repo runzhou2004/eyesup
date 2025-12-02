@@ -30,11 +30,43 @@ recognition.lang = 'en-US';
 // 1. TEXT TO SPEECH (Reading messages)
 function speakText(text) {
   if (!text) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  // Optional: Select a specific voice (e.g., Google US English)
-  const voices = window.speechSynthesis.getVoices();
-  utterance.voice = voices.find(v => v.name.includes('Google US English')) || voices[0];
-  window.speechSynthesis.speak(utterance);
+  if (!('speechSynthesis' in window)) return console.warn('Speech synthesis not supported');
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    // pick a cached voice if available
+    if (window.__cachedVoice) utterance.voice = window.__cachedVoice;
+    else {
+      const voices = window.speechSynthesis.getVoices() || [];
+      utterance.voice = voices.find(v => v.name && v.name.includes('Google US English')) || voices[0] || null;
+    }
+    utterance.lang = 'en-US';
+    // Ensure speaking happens after voices are loaded; if none are available, try again after voiceschanged
+    if ((window.speechSynthesis.getVoices() || []).length === 0) {
+      const onvoices = () => {
+        const vs = window.speechSynthesis.getVoices();
+        utterance.voice = vs.find(v => v.name && v.name.includes('Google US English')) || vs[0] || null;
+        window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.removeEventListener('voiceschanged', onvoices);
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', onvoices);
+      return;
+    }
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {
+    console.error('speakText error', e);
+  }
+}
+
+// cache voices when they become available (helps some browsers where getVoices is empty initially)
+if ('speechSynthesis' in window) {
+  const cacheVoices = () => {
+    const vs = window.speechSynthesis.getVoices();
+    if (vs && vs.length) {
+      window.__cachedVoice = vs.find(v => v.name && v.name.includes('Google US English')) || vs[0];
+    }
+  };
+  cacheVoices();
+  window.speechSynthesis.addEventListener('voiceschanged', cacheVoices);
 }
 
 // 2. SPEECH TO TEXT (Sending messages)
@@ -272,7 +304,7 @@ async function loadMessages() {
 function handleIncomingMessage(msg) {
   addMessage(msg);
   addLiveEvent(msg);
-  if (state.activePage === 'drive' && state.autoReadDrive && !msg.outgoing) {
+  if ((state.activePage === 'drive' || state.activePage === 'home') && state.autoReadDrive && !msg.outgoing) {
     const shouldRead = messageMatchesActiveKeywords(msg);
     if (shouldRead) speakText(`New from ${msg.from || 'unknown'}: ${msg.text}`);
   }
