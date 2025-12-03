@@ -302,9 +302,15 @@ async function loadMessages() {
 }
 
 function handleIncomingMessage(msg) {
+  // 1. Check if this message ID already exists in our local state
+  const alreadyExists = state.messages.some(m => m.id === msg.id);
+
+  // 2. Add or update the message in the list
   addMessage(msg);
   addLiveEvent(msg);
-  if ((state.activePage === 'drive' || state.activePage === 'home') && state.autoReadDrive && !msg.outgoing) {
+
+  // 3. Only speak if the message is NEW (did not exist before this function ran)
+  if (!alreadyExists && (state.activePage === 'drive' || state.activePage === 'home') && state.autoReadDrive && !msg.outgoing) {
     const shouldRead = messageMatchesActiveKeywords(msg);
     if (shouldRead) speakText(`New from ${msg.from || 'unknown'}: ${msg.text}`);
   }
